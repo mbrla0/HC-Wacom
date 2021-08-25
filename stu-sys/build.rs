@@ -51,7 +51,7 @@ fn main() {
 	let lib = home
 		.join("C/lib/")
 		.join(target_name())
-		.join("wgssSTU.lib");
+		.join(library_name());
 	if !lib.exists() {
 		panic!(
 			"Missing the required C library file at {:?}",
@@ -86,6 +86,21 @@ const fn target_name() -> &'static str {
 		all(target_arch = "x86", target_os = "windows"),
 		all(target_arch = "x86_64", target_os = "linux"),
 		all(target_arch = "x86", target_os = "linux")
+	)))]
+	std::compile_error!("Unsupported target for the Wacom STU SDK");
+
+	name
+}
+
+/** Name of the current library file, in Wacom's naming scheme. */
+const fn library_name() -> &'static str {
+	#[cfg(target_os = "windows")]
+	let name = "wgssSTU.lib";
+	#[cfg(target_os = "linux")]
+	let name = "wgssSTU.so";
+	#[cfg(not(any(
+		target_os = "windows",
+		target_os = "linux",
 	)))]
 	std::compile_error!("Unsupported target for the Wacom STU SDK");
 

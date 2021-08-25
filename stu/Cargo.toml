@@ -1,0 +1,10 @@
+[package]
+name = "stu"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+stu-sys = { path = "../stu-sys" }
+
+thiserror = "1"
+bytemuck = "1"

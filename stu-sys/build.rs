@@ -97,7 +97,7 @@ const fn library_name() -> &'static str {
 	#[cfg(target_os = "windows")]
 	let name = "wgssSTU.lib";
 	#[cfg(target_os = "linux")]
-	let name = "wgssSTU.so";
+	let name = "libwgssSTU.so";
 	#[cfg(not(any(
 		target_os = "windows",
 		target_os = "linux",

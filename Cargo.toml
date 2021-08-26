@@ -2,5 +2,5 @@
 members = [
 	"stu-sys",
 	"stu",
-	"tool"
+	"hc"
 ]

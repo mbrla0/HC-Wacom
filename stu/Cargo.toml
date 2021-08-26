@@ -6,5 +6,6 @@ edition = "2018"
 [dependencies]
 stu-sys = { path = "../stu-sys" }
 
+log = "0.4"
 thiserror = "1"
 bytemuck = "1"

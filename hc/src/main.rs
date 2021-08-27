@@ -12,6 +12,12 @@ fn main() {
 		println!("Table Depth: {}", caps.input_grid_pressure());
 
 		device.inking(true);
-		loop {}
+
+		let mut queue = device.queue().unwrap();
+		loop {
+			let event = queue.recv().unwrap();
+
+			println!("{:?}", event);
+		}
 	}
 }

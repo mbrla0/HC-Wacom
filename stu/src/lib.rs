@@ -1,17 +1,17 @@
-use crate::handle::Handle;
-use crate::error::{InternalError, ClientError};
-
 /// Handling of errors from the Wacom STU interface.
 mod error;
 pub use error::{Exception, Error};
-
-use std::collections::HashSet;
 
 /// Handles to memory managed by the Wacom STU allocator.
 mod handle;
 
 /// Code dealing with the handling of reports from the device.
 mod report;
+pub use report::{Queue, Event, TryRecvError};
+
+use std::collections::HashSet;
+use crate::handle::Handle;
+use crate::error::{InternalError, ClientError};
 
 /// The interface to a Wacom STU tablet.
 pub struct Tablet {
@@ -121,6 +121,12 @@ impl Tablet {
 			input_height: u32::from(capability.tabletMaxY),
 			input_depth: u32::from(capability.tabletMaxPressure)
 		})
+	}
+
+	/// Opens a queue with which to receive events from the tablet.
+	pub fn queue(&mut self) -> Result<Queue, Error> {
+		let caps = self.capability()?;
+		Queue::new(self, caps)
 	}
 }
 

@@ -13,27 +13,31 @@ use std::collections::HashSet;
 use crate::handle::Handle;
 use crate::error::{InternalError, ClientError};
 
+use std::sync::{Arc, Mutex};
+
 /// The interface to a Wacom STU tablet.
 pub struct Tablet {
 	/// The raw handle to the tablet interface.
-	raw: RawTablet,
+	raw: Arc<RawTabletConnection>,
 	/// The list of reports types supported by this tablet.
 	supported_reports: HashSet<stu_sys::tagWacomGSS_ReportId>,
 }
 impl Tablet {
 	/// Create a new Tablet instance from the given RawTablet interface.
-	pub(crate) fn wrap(raw: RawTablet) -> Result<Self, Error> {
+	pub(crate) fn wrap(raw: RawTabletConnection) -> Result<Self, Error> {
 		let supported_reports = {
 			let report_list = unsafe {
 				let mut list = std::ptr::null_mut();
 				let mut length = 0;
 
-				let result = InternalError::from_wacom_stu({
+				let result = raw.dispatch(|interface| {
 					stu_sys::WacomGSS_Interface_getReportCountLengths(
-						raw.interface,
+						interface,
 						&mut length,
 						&mut list)
-				}).map_err(InternalError::unwrap_to_general);
+				});
+				let result = InternalError::from_wacom_stu(result)
+					.map_err(InternalError::unwrap_to_general);
 
 				match result {
 					Ok(_) => Some(Handle::wrap_slice(list, length as _)),
@@ -61,7 +65,7 @@ impl Tablet {
 		};
 
 		Ok(Self {
-			raw,
+			raw: Arc::new(raw),
 			supported_reports
 		})
 	}
@@ -78,15 +82,18 @@ impl Tablet {
 	}
 
 	/// Clear the screen of the device.
-	pub fn clear(&mut self) -> Result<(), Error> {
+	pub fn clear(&self) -> Result<(), Error> {
 		self.check_support(stu_sys::tagWacomGSS_ReportId_WacomGSS_ReportId_ClearScreen)?;
-		InternalError::from_wacom_stu(unsafe {
-			stu_sys::WacomGSS_Protocol_setClearScreen(self.raw.interface)
-		}).map_err(InternalError::unwrap_to_general)
+
+		let result = self.raw.dispatch(|interface| unsafe {
+			stu_sys::WacomGSS_Protocol_setClearScreen(interface)
+		});
+		InternalError::from_wacom_stu(result)
+			.map_err(InternalError::unwrap_to_general)
 	}
 
 	/// Changes whether inking on the display is enabled or not.
-	pub fn inking(&mut self, enabled: bool) -> Result<(), Error> {
+	pub fn inking(&self, enabled: bool) -> Result<(), Error> {
 		self.check_support(stu_sys::tagWacomGSS_ReportId_WacomGSS_ReportId_InkingMode)?;
 
 		let mode = if enabled {
@@ -94,22 +101,27 @@ impl Tablet {
 		} else {
 			stu_sys::tagWacomGSS_InkingMode_WacomGSS_InkingMode_Off
 		};
-		InternalError::from_wacom_stu(unsafe {
-			stu_sys::WacomGSS_Protocol_setInkingMode(self.raw.interface, mode as _)
-		}).map_err(InternalError::unwrap_to_general)
+		let result = self.raw.dispatch(|interface| unsafe {
+			stu_sys::WacomGSS_Protocol_setInkingMode(interface, mode as _)
+		});
+		InternalError::from_wacom_stu(result)
+			.map_err(InternalError::unwrap_to_general)
 	}
 
 	/// Get information on the layout and the capabilities of the device.
-	pub fn capability(&mut self) -> Result<Capability, Error> {
+	pub fn capability(&self) -> Result<Capability, Error> {
 		self.check_support(stu_sys::tagWacomGSS_ReportId_WacomGSS_ReportId_Capability)?;
 		let capability = unsafe {
 			let mut capability = std::mem::zeroed();
-			InternalError::from_wacom_stu({
+
+			let result = self.raw.dispatch(|interface| {
 				stu_sys::WacomGSS_Protocol_getCapability(
-					self.raw.interface,
+					interface,
 					std::mem::size_of::<stu_sys::WacomGSS_Capability>() as _,
 					&mut capability)
-			}).map_err(InternalError::unwrap_to_general)?;
+			});
+			InternalError::from_wacom_stu(result)
+				.map_err(InternalError::unwrap_to_general)?;
 
 			Handle::wrap(capability)
 		};
@@ -124,7 +136,7 @@ impl Tablet {
 	}
 
 	/// Opens a queue with which to receive events from the tablet.
-	pub fn queue(&mut self) -> Result<Queue, Error> {
+	pub fn queue(&self) -> Result<Queue, Error> {
 		let caps = self.capability()?;
 		Queue::new(self, caps)
 	}
@@ -182,27 +194,27 @@ impl Capability {
 	}
 }
 
-struct RawTablet {
-	interface: stu_sys::WacomGSS_Interface,
+/// A wrapper around a a handle to an interface.
+struct RawTabletConnection {
+	interface: Mutex<stu_sys::WacomGSS_Interface>,
 }
-impl RawTablet {
-	fn connected(&self) -> bool {
-		let mut connected = 0;
-		let _ = InternalError::from_wacom_stu(unsafe {
-			stu_sys::WacomGSS_Interface_isConnected(
-				self.interface,
-				&mut connected)
-		}).map_err(InternalError::unwrap_to_general);
+impl RawTabletConnection {
+	/// Dispatch the given functor with a raw handle to the interface.
+	fn dispatch<F, T>(
+		&self,
+		fun: F) -> T
+		where F: FnOnce(stu_sys::WacomGSS_Interface) -> T {
 
-		connected != 0
+		let interface = self.interface.lock().unwrap();
+		fun(*interface)
 	}
 }
-impl Drop for RawTablet {
+impl Drop for RawTabletConnection {
 	fn drop(&mut self) {
-		unsafe {
-			let _ = stu_sys::WacomGSS_Interface_disconnect(self.interface);
-			let _ = stu_sys::WacomGSS_Interface_free(self.interface);
-		}
+		self.dispatch(|interface| unsafe {
+			let _ = stu_sys::WacomGSS_Interface_disconnect(interface);
+			let _ = stu_sys::WacomGSS_Interface_free(interface);
+		});
 	}
 }
 
@@ -257,7 +269,9 @@ impl Connector {
 			interface
 		};
 
-		Tablet::wrap(RawTablet { interface })
+		Tablet::wrap(RawTabletConnection {
+			interface: Mutex::new(interface)
+		})
 	}
 }
 

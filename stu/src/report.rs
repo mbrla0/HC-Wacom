@@ -1,8 +1,9 @@
-use crate::{Tablet, Error, Capability};
+use crate::{Tablet, Error, Capability, RawTabletConnection};
 use crate::error::{InternalError, ClientError};
 use crate::handle::Handle;
 use std::collections::VecDeque;
 use std::time::Instant;
+use std::sync::Arc;
 
 /// An input event coming from a tablet device.
 ///
@@ -80,25 +81,27 @@ impl Event {
 }
 
 /// A report queue connected to a tablet device.
-pub struct Queue<'a> {
+pub struct Queue {
 	/// The device this queue is polling update data off of.
-	_device: &'a Tablet,
+	_device: Arc<RawTabletConnection>,
 	/// The queue backing this structure.
 	queue: RawQueue,
 	/// The report handler used by this instance of the queue.
 	handler: ReportHandler,
 }
-impl<'a> Queue<'a> {
+impl Queue {
 	/// Creates a new queue for this tablet device.
-	pub(crate) fn new(device: &'a Tablet, caps: Capability) -> Result<Self, Error> {
+	pub(crate) fn new(device: &Tablet, caps: Capability) -> Result<Self, Error> {
 		let queue = RawQueue(unsafe {
 			let mut queue = std::mem::zeroed();
 
-			InternalError::from_wacom_stu({
+			let result = device.raw.dispatch(|interface| {
 				stu_sys::WacomGSS_Interface_interfaceQueue(
-					device.raw.interface,
+					interface,
 					&mut queue)
-			}).map_err(InternalError::unwrap_to_general)?;
+			});
+			InternalError::from_wacom_stu(result)
+				.map_err(InternalError::unwrap_to_general)?;
 
 			queue
 		});
@@ -110,7 +113,7 @@ impl<'a> Queue<'a> {
 			queue: Default::default()
 		};
 
-		Ok(Self { _device: device, queue, handler })
+		Ok(Self { _device: device.raw.clone(), queue, handler })
 	}
 
 	/// Handles a report using the internal report handler in this queue.

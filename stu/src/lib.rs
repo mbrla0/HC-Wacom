@@ -207,18 +207,20 @@ impl Drop for RawTablet {
 }
 
 /// The structure containing information about a device.
-pub struct Information<'a> {
-	device: &'a stu_sys::WacomGSS_UsbDevice
+#[derive(Debug, Eq, PartialEq, Hash)]
+pub struct Information {
+	id_vendor: u16,
+	id_product: u16
 }
-impl Information<'_> {
+impl Information {
 	/// Vendor identification number of this device.
 	pub fn vendor(&self) -> u16 {
-		self.device.usbDevice.idVendor
+		self.id_vendor
 	}
 
 	/// Product identification number of this device.
 	pub fn product(&self) -> u16 {
-		self.device.usbDevice.idProduct
+		self.id_product
 	}
 }
 
@@ -235,7 +237,8 @@ impl Connector {
 	/// Get the information about the device this connector is targeting.
 	pub fn info(&self) -> Information {
 		Information {
-			device: &self.device
+			id_vendor: self.device.usbDevice.idVendor,
+			id_product: self.device.usbDevice.idProduct
 		}
 	}
 

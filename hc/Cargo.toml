@@ -5,3 +5,7 @@ edition = "2018"
 
 [dependencies]
 stu = { path = "../stu" }
+nwg = { package = "native-windows-gui", version = "1" }
+nwd = { package = "native-windows-derive", version = "1" }
+
+thiserror = "1"

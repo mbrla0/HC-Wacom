@@ -7,7 +7,7 @@
 #![cfg_attr(debug_assertions, windows_subsystem = "console")]
 
 use crate::path::EventPath;
-use crate::window::NoTabletConnector;
+use crate::window::{NoTabletConnector, ManagementError};
 use crate::path::EventCanvas;
 
 /// Utility structures for interpolating curved paths from ordered collections
@@ -30,53 +30,65 @@ fn main() {
 						"There are no tablet devices available on the system");
 					1
 				}
+				NoTabletConnector::WindowCreationError(what) => {
+					let message = format!(
+						"Could not create device prompt window: {}",
+						what);
+					nwg::error_message(
+						"Error",
+						&message);
+					1
+				}
 			};
 
 			std::process::exit(exit);
 		}
 	};
 
-	let window = window::ManagementWindow::default();
-	let _window = nwg::NativeUi::build_ui(window).unwrap();
-	let controller = _window.controller();
+	let device = stu::list_devices()
+		.find(|connector| connector.info() == information);
+	let device = match device {
+		Some(device) => device,
+		None => {
+			let message = format!(
+				"Could not find {:04x}:{:04x}. Has the tablet been disconnected?",
+				information.vendor(), information.product());
+			nwg::error_message(
+				"Tablet",
+				&message);
 
-	std::thread::spawn(move || {
-		let device = stu::list_devices()
-			.find(|connector| connector.info() == information)
-			.unwrap();
-
-		println!("{:04x}:{:04x}", device.info().vendor(), device.info().product());
-		let mut device = device.connect()
-			.map_err(|what| {
-				println!("{:?}", what);
-				println!("{}", what);
-			}).unwrap();
-
-		let caps = device.capability().unwrap();
-		device.clear().unwrap();
-
-		println!("LCD Width: {}", caps.width());
-		println!("LCD Height: {}", caps.height());
-		println!("Table Width: {}", caps.input_grid_width());
-		println!("Table Height: {}", caps.input_grid_height());
-		println!("Table Depth: {}", caps.input_grid_pressure());
-
-		device.inking(true);
-
-		let mut queue = device.queue().unwrap();
-		let mut path = EventPath::new();
-		let mut canvas = EventCanvas::new(caps.width(), caps.height());
-
-		controller.update_preview(&canvas);
-		loop {
-			let event = queue.recv().unwrap();
-			path.process(event);
-			canvas.process(event);
-
-			if let Err(_) = controller.update_preview(&canvas) {
-				break
-			}
+			std::process::exit(1);
 		}
-	});
-	nwg::dispatch_thread_events();
+	};
+	let mut device = match device.connect() {
+		Ok(device) => device,
+		Err(what) => {
+			let message = format!(
+				"\
+					Could not connect to {:04x}:{:04x}: {}.\n\n\
+					\
+					Error: {:?}\
+				",
+				information.vendor(),
+				information.product(),
+				what, what);
+
+			nwg::error_message(
+				"Tablet",
+				&message);
+
+			std::process::exit(1);
+		}
+	};
+
+	if let Err(what) = window::manage(device) {
+		let message = format!(
+			"A fatal error has occurred: {}",
+			what);
+		nwg::error_message(
+			"Tablet",
+			&message);
+
+		std::process::exit(1);
+	}
 }

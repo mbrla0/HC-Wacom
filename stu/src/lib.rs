@@ -2,12 +2,12 @@
 mod error;
 pub use error::{Exception, Error};
 
-/// Handles to memory managed by the Wacom STU allocator.
-mod handle;
-
 /// Code dealing with the handling of reports from the device.
 mod report;
 pub use report::{Queue, Event, TryRecvError};
+
+/// Handles to memory managed by the Wacom STU allocator.
+mod handle;
 
 use std::collections::HashSet;
 use crate::handle::Handle;

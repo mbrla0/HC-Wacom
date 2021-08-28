@@ -383,8 +383,6 @@ impl ManagementWindow {
 
 			self.display.set_size(canvas.width(), canvas.height());
 			self.display.set_bitmap(Some(&bitmap));
-
-			eprintln!("{:?}", time.elapsed());
 		}
 	}
 

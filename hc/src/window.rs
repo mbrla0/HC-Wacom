@@ -2,6 +2,8 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use nwg::NativeUi;
 use std::borrow::BorrowMut;
+use crate::path::EventCanvas;
+use std::sync::mpsc::SendError;
 
 /// Initialize globals required by the windowing interface.
 pub fn init() {
@@ -188,6 +190,124 @@ impl std::fmt::Display for ConnectorDisplay {
 }
 
 ///
+#[derive(nwd::NwgUi)]
 pub struct ManagementWindow {
+	/// The icon we're gonna be using for the window.
+	#[nwg_resource(source_system: Some(nwg::OemIcon::Information))]
+	icon: nwg::Icon,
 
+	/// The top level window this controller is contained in.
+	#[nwg_control(
+		title: "Tablet",
+		flags: "WINDOW",
+		center: true,
+		icon: Some(&data.icon),
+		size: (800, 600)
+	)]
+	#[nwg_events(
+		OnInit: [Self::init],
+		OnWindowClose: [Self::on_exit]
+	)]
+	window: nwg::Window,
+
+	#[nwg_control(
+		background_color: Some([255, 255, 255]),
+		position: (10, 30)
+	)]
+	/// The controller managing the display of the pen bitmap.
+	display: nwg::ImageFrame,
+	/// Label for the display update.
+	#[nwg_control(
+		text: "Screen Preview",
+		position: (10, 10),
+		size: (100, 20)
+	)]
+	display_label: nwg::Label,
+
+	#[nwg_control()]
+	#[nwg_events(
+		OnNotice: [Self::on_display_update]
+	)]
+	/// The notice object associated with the updating of the display bitmap.
+	display_update: nwg::Notice,
+
+	/// The channel through which we pull updates to the display bitmap.
+	display_blobs: std::sync::mpsc::Receiver<(u32, u32, Box<[u8]>)>,
+	/// A copy of the sender side of the display bitmap channel.
+	display_blobs_tx: std::sync::mpsc::Sender<(u32, u32, Box<[u8]>)>
 }
+impl ManagementWindow {
+	/// Create a new instance of the controller structure.
+	pub fn controller(&self) -> ManagementWindowController {
+		ManagementWindowController {
+			display_update: self.display_update.sender(),
+			display_blobs: self.display_blobs_tx.clone(),
+		}
+	}
+
+	/// Populates the data in the window controls.
+	fn init(&self) {
+		self.window.set_visible(true);
+		self.window.set_focus();
+	}
+
+	/// Called when an update to the pen display preview has been requested.
+	fn on_display_update(&self) {
+		let (width, height, blob) = self.display_blobs
+			.try_recv()
+			.unwrap();
+		let bitmap = nwg::Bitmap::from_bin(&blob[..]).unwrap();
+
+		self.display.set_size(width, height);
+		self.display.set_bitmap(Some(&bitmap));
+	}
+
+	/// Called when the window has been told to close.
+	fn on_exit(&self) {
+		nwg::stop_thread_dispatch();
+	}
+}
+impl Default for ManagementWindow {
+	fn default() -> Self {
+		let (tx, rx) = std::sync::mpsc::channel();
+
+		Self {
+			icon: Default::default(),
+			window: Default::default(),
+			display: Default::default(),
+			display_label: Default::default(),
+			display_update: Default::default(),
+			display_blobs: rx,
+			display_blobs_tx: tx,
+		}
+	}
+}
+
+/// A structure for sending control and update events to the main window
+#[derive(Clone)]
+pub struct ManagementWindowController {
+	/// The mechanism through which we notify the window of a preview update.
+	display_update: nwg::NoticeSender,
+	/// The mechanism through which we send bitmap blobs of the preview.
+	display_blobs: std::sync::mpsc::Sender<(u32, u32, Box<[u8]>)>,
+}
+impl ManagementWindowController {
+	/// Updates the preview image being displayed on this window so that it
+	/// corresponds to the data in the given [canvas].
+	///
+	/// [canvas]: crate::path::EventCanvas
+	pub fn update_preview(&self, source: &EventCanvas)
+		-> Result<(), ManagementWindowDisconnected> {
+
+		let bitmap = source.to_bitmap();
+		self.display_blobs.send((source.width(), source.height(), bitmap))
+			.map_err(|_| ManagementWindowDisconnected)?;
+
+		self.display_update.notice();
+		Ok(())
+	}
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, thiserror::Error)]
+#[error("the management window has been closed")]
+pub struct ManagementWindowDisconnected;

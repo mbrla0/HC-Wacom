@@ -9,3 +9,11 @@ nwg = { package = "native-windows-gui", version = "1" }
 nwd = { package = "native-windows-derive", version = "1" }
 
 thiserror = "1"
+
+[dependencies.image]
+version = "0.23"
+default-features = false
+features = [
+    "bmp"
+]
+

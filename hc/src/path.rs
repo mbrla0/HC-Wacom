@@ -10,6 +10,8 @@ pub struct EventCanvas {
 	width: u32,
 	/// The height of the canvas, in pixels.
 	height: u32,
+	/// The last point the pen stroke.
+	last: Option<(u32, u32)>,
 }
 impl EventCanvas {
 	/// Creates a new, blank canvas on with the given dimensions.
@@ -28,7 +30,49 @@ impl EventCanvas {
 			.expect("Canvas size does not fit in a usize");
 
 		let buffer = vec![0u8; bytes].into_boxed_slice();
-		Self { buffer, width, height }
+		Self { buffer, width, height, last: None }
+	}
+
+	/// The width of this canvas, in pixels.
+	pub fn width(&self) -> u32 {
+		self.width
+	}
+
+	/// The height of this canvas, in pixels.
+	pub fn height(&self) -> u32 {
+		self.height
+	}
+
+	/// Copies the image data in this canvas into a memory blob encoded as a
+	/// bitmap.
+	///
+	/// The format the bitmap will be in is full color 24-bpp RGB, in which
+	/// pixels marked as active will be painted black and pixels that are not
+	/// will be painted white.
+	pub fn to_bitmap(&self) -> Box<[u8]> {
+		let image = image::ImageBuffer::from_fn(
+			self.width,
+			self.height,
+			|x, y| {
+				let pixel = self.get(x, y).unwrap();
+				if pixel {
+					image::Rgb([0u8, 0u8, 0u8])
+				} else {
+					image::Rgb([255u8, 255u8, 255u8])
+				}
+			});
+
+		let mut buffer = Vec::new();
+		let mut encoder = image::codecs::bmp::BmpEncoder::new(&mut buffer);
+
+		encoder.encode(
+			image.as_raw(),
+			image.width(),
+			image.height(),
+			image::ColorType::Rgb8)
+			.unwrap();
+
+		buffer.into_boxed_slice()
 	}
 
 	/// Clears this canvas back into an unset state.
@@ -46,6 +90,42 @@ impl EventCanvas {
 			let y = y.round() as u32;
 
 			self.set(x, y, true);
+			if let Some((last_x, last_y)) = self.last {
+				let mut ix = f64::from(last_x);
+				let mut iy = f64::from(last_y);
+
+				let dx = i64::from(x) - i64::from(last_x);
+				let dy = i64::from(y) - i64::from(last_y);
+
+				if dx != 0 || dy != 0 {
+					/* Trace a line to this point from the last point. */
+					if dx.abs() > dy.abs() {
+						/* Trace along X. */
+						let slope = dy as f64 / dx as f64;
+						for ax in 0..dx.abs() {
+							let x = i64::from(last_x) + ax * dx.signum();
+							let y = iy.round();
+
+							self.set(x as u32, y as u32, true);
+							iy += slope * dx.signum() as f64;
+						}
+					} else {
+						/* Trace along Y. */
+						let slope = dx as f64 / dy as f64;
+						for ay in 0..dy.abs() {
+							let x = ix.round();
+							let y = i64::from(last_y) + ay * dy.signum();
+
+							self.set(x as u32, y as u32, true);
+							ix += slope * dy.signum() as f64;
+						}
+					}
+				}
+			}
+
+			self.last = Some((x, y));
+		} else {
+			self.last = None
 		}
 	}
 

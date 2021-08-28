@@ -3,8 +3,8 @@
 /* Display a console when in debug mode, have just the window be open when in
  * release mode. We don't want users thinking this is some kind of bad program,
  * do we? */
-#[cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-#[cfg_attr(debug_assertions, windows_subsystem = "console")]
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![cfg_attr(debug_assertions, windows_subsystem = "console")]
 
 use crate::path::EventPath;
 use crate::window::NoTabletConnector;
@@ -36,6 +36,10 @@ fn main() {
 		}
 	};
 
+	let window = window::ManagementWindow::default();
+	let _window = nwg::NativeUi::build_ui(window).unwrap();
+	let controller = _window.controller();
+
 	std::thread::spawn(move || {
 		let device = stu::list_devices()
 			.find(|connector| connector.info() == information)
@@ -63,11 +67,16 @@ fn main() {
 		let mut path = EventPath::new();
 		let mut canvas = EventCanvas::new(caps.width(), caps.height());
 
+		controller.update_preview(&canvas);
 		loop {
 			let event = queue.recv().unwrap();
 			path.process(event);
 			canvas.process(event);
-		}
-	}).join().unwrap();
 
+			if let Err(_) = controller.update_preview(&canvas) {
+				break
+			}
+		}
+	});
+	nwg::dispatch_thread_events();
 }

@@ -402,8 +402,8 @@ impl ManagementWindow {
 				width: 1316,
 				height: 668
 			},
-			delta: Duration::from_secs(2),
-			steps: unsafe { NonZeroU32::new_unchecked(1000) }
+			delta: Duration::from_secs(4),
+			steps: unsafe { NonZeroU32::new_unchecked(10000) }
 		}.play_and_notify(self.display_paint_done.sender());
 	}
 

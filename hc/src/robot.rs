@@ -22,7 +22,7 @@ pub struct Playback {
 impl Playback {
 	/// Maps a point in normalized space into a point in screen space.
 	fn map(&self, point: Point) -> (i32, i32) {
-		let Point { x, y } = point;
+		let Point { x, y, .. } = point;
 
 		let w = f64::from(nwg::Monitor::virtual_width());
 		let h = f64::from(nwg::Monitor::virtual_height());
@@ -46,9 +46,10 @@ impl Playback {
 			panic!("Called Playback::play_and_notify() more than once");
 		}
 
-		let mut pressed = false;
 		std::thread::spawn(move || {
 			let mut x = 0.0;
+			let mut pressed = false;
+			let trace = self.path.trace();
 
 			let dt = self.delta.div_f64(f64::from(self.steps.get()));
 			let dx = 1.0 / f64::from(self.steps.get());
@@ -57,11 +58,11 @@ impl Playback {
 				let timer = Instant::now();
 
 				/* Evaluate the curve at the current position. */
-				let point = match self.path.get(x) {
+				let point = match trace.get(x) {
 					Some(point) => point,
 					None => break
 				};
-				let point = self.map(point);
+				let (px, py) = self.map(point);
 
 				/* Build the input structure and send it. */
 				unsafe {
@@ -70,8 +71,8 @@ impl Playback {
 
 					input.type_ = winapi::um::winuser::INPUT_MOUSE;
 
-					input.u.mi_mut().dx = point.0;
-					input.u.mi_mut().dy = point.1;
+					input.u.mi_mut().dx = px;
+					input.u.mi_mut().dy = py;
 					input.u.mi_mut().mouseData = 0;
 
 					input.u.mi_mut().time = 0;
@@ -81,9 +82,12 @@ impl Playback {
 						  winapi::um::winuser::MOUSEEVENTF_ABSOLUTE
 						| winapi::um::winuser::MOUSEEVENTF_VIRTUALDESK
 						| winapi::um::winuser::MOUSEEVENTF_MOVE
-						| if !pressed {
+						| if !pressed && point.touch {
 							  pressed = true;
 							  winapi::um::winuser::MOUSEEVENTF_LEFTDOWN
+						  } else if pressed && !point.touch {
+							  pressed = false;
+							  winapi::um::winuser::MOUSEEVENTF_LEFTUP
 						  } else { 0 };
 
 					let _ = winapi::um::winuser::SendInput(
@@ -94,11 +98,10 @@ impl Playback {
 
 				x += dx;
 
-				let elapsed = timer.elapsed();
-				if elapsed < dt {
-					let diff = dt - elapsed;
-					std::thread::sleep(diff);
-				}
+				/* Spinning is way more accurate than using thread::sleep,
+				 * and for small amounts time like we're dealing with here
+				 * it is too inaccurate. */
+				while timer.elapsed() < dt { }
 			}
 
 			/* Tell the mouse to release the left down key. */

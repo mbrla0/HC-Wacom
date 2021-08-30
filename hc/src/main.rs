@@ -17,6 +17,9 @@ mod path;
 /// Structures handling windowing and display structures.
 mod window;
 
+/// Structures handling the automated playback of user input.
+mod robot;
+
 fn main() {
 	window::init();
 	let information = match window::pick_tablet() {

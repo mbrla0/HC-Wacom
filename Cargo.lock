@@ -177,6 +177,7 @@ dependencies = [
  "native-windows-gui",
  "stu",
  "thiserror",
+ "winapi",
 ]
 
 [[package]]

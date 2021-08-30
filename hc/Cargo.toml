@@ -10,6 +10,12 @@ nwd = { package = "native-windows-derive", version = "1" }
 
 thiserror = "1"
 
+[dependencies.winapi]
+version = "0.3"
+features = [
+    "winuser"
+]
+
 [dependencies.image]
 version = "0.23"
 default-features = false

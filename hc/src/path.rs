@@ -3,6 +3,7 @@ use std::time::{Instant, Duration};
 use stu::Event;
 
 /// A structure for generating pictures from events.
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct EventCanvas {
 	/// A monochrome pixel data buffer.
 	buffer: Box<[u8]>,
@@ -165,6 +166,7 @@ impl EventCanvas {
 }
 
 /// A structure for generating paths from events.
+#[derive(Debug, Clone, PartialEq)]
 pub struct EventPath {
 	/// Ordered list of events in this path, sorted by the time in which they
 	/// happened and were reported by the underlying API.
@@ -184,7 +186,9 @@ impl EventPath {
 	/// time as the given event, this event will replace it in the path and
 	/// this function will return the event that was replaced.
 	pub fn process(&mut self, event: Event) -> Option<Event> {
-		self.events.insert(event.time(), event)
+		if event.touching() {
+			self.events.insert(event.time(), event)
+		} else { None }
 	}
 
 	/// Clears all of the events in this path.
@@ -203,8 +207,8 @@ impl EventPath {
 		 * looking for. */
 		let t = t.clamp(0.0, 1.0);
 
-		let beg = self.events.iter().next();
-		let end = self.events.iter().rev().next();
+		let beg = self.events.iter().next().filter(|(_, event)| event.touching());
+		let end = self.events.iter().rev().next().filter(|(_, event)| event.touching());
 
 		let (beg, end) = match (beg, end) {
 			(Some((_, beg)), Some((_, end))) => (beg, end),

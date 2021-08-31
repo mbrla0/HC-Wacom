@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::time::{Instant, Duration};
+use std::time::Instant;
 use stu::Event;
 
 /// A structure for generating pictures from events.

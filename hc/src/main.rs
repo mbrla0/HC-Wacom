@@ -6,9 +6,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![cfg_attr(debug_assertions, windows_subsystem = "console")]
 
-use crate::path::EventPath;
-use crate::window::{NoTabletConnector, ManagementError};
-use crate::path::EventCanvas;
+use crate::window::NoTabletConnector;
 
 /// Utility structures for interpolating curved paths from ordered collections
 /// of points.
@@ -22,6 +20,10 @@ mod robot;
 
 fn main() {
 	window::init();
+	window::pick_physical_area(window::AreaSelectionParameters {
+		preferred_dimensions: (800, 600)
+	}).unwrap();
+
 	let information = match window::pick_tablet() {
 		Ok(information) => information,
 		Err(what) => {

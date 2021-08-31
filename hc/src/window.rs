@@ -1321,6 +1321,20 @@ impl ManagementWindow {
 
 			self.display.set_size(canvas.width(), canvas.height());
 			self.display.set_bitmap(Some(&bitmap));
+
+			/* Move the UI around. */
+			self.window.set_size(canvas.width() + 20, canvas.height() + 75);
+			let (_, btn_height) = self.display_clear_btn.size();
+
+			self.display_clear_btn.set_size(
+				(canvas.width() / 2).saturating_sub(5),
+				btn_height);
+			self.display_playback_btn.set_size(
+				(canvas.width() / 2).saturating_sub(5),
+				btn_height);
+			self.display_playback_btn.set_position(
+				(20 + (canvas.width() / 2).saturating_sub(5)) as i32,
+				140);
 		}
 	}
 

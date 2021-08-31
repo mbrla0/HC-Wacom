@@ -51,30 +51,28 @@ pub struct DeviceSelection {
 
 	/// The top level window this controller is contained in.
 	#[nwg_control(
-	title: "Tablet",
-	flags: "WINDOW",
-	center: true,
-	icon: Some(&data.icon),
-	size: (400, 100)
+		flags: "WINDOW",
+		center: true,
+		icon: Some(&data.icon),
+		size: (400, 100)
 	)]
 	#[nwg_events(
-	OnInit: [Self::init],
-	OnWindowClose: [Self::on_cancel]
+		OnInit: [Self::init],
+		OnWindowClose: [Self::on_cancel]
 	)]
 	window: nwg::Window,
 
 	/// The description of what should be done.
 	#[nwg_control(
-	text: "Select the tablet device you would like to connect to.",
-	size: (380, 20),
-	position: (10, 10)
+		size: (380, 20),
+		position: (10, 10)
 	)]
 	description: nwg::Label,
 
 	/// The device connector selection box.
 	#[nwg_control(
-	size: (380, 40),
-	position: (10, 30)
+		size: (380, 40),
+		position: (10, 30)
 	)]
 	selection: nwg::ComboBox<ConnectorDisplay>,
 
@@ -83,11 +81,10 @@ pub struct DeviceSelection {
 	/// Having this button be clicked indicates that the user does not wish to
 	/// connect to any devices and that the operation should be aborted.
 	#[nwg_control(
-	text: "Cancel",
-	position: (290, 65)
+		position: (290, 65)
 	)]
 	#[nwg_events(
-	OnButtonClick: [Self::on_cancel]
+		OnButtonClick: [Self::on_cancel]
 	)]
 	cancel: nwg::Button,
 
@@ -96,11 +93,10 @@ pub struct DeviceSelection {
 	/// Having this button be clicked indicates that the user wishes to connect
 	/// to the device that is currently selected in the selection box.
 	#[nwg_control(
-	text: "Connect",
-	position: (180, 65)
+		position: (180, 65)
 	)]
 	#[nwg_events(
-	OnButtonClick: [Self::on_accept]
+		OnButtonClick: [Self::on_accept]
 	)]
 	accept: nwg::Button,
 
@@ -143,6 +139,11 @@ impl DeviceSelection {
 		self.selection.sync();
 		self.selection.set_selection(Some(0));
 		self.selection.set_visible(true);
+
+		self.window.set_text(crate::strings::selector::title());
+		self.description.set_text(crate::strings::selector::description());
+		self.accept.set_text(crate::strings::selector::accept());
+		self.cancel.set_text(crate::strings::selector::cancel());
 
 		self.window.set_visible(true);
 		self.window.set_focus();

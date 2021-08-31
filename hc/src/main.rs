@@ -18,6 +18,9 @@ mod window;
 /// Structures handling the automated playback of user input.
 mod robot;
 
+/// Strings used in the UI.
+mod strings;
+
 fn main() {
 	window::init();
 	let information = match window::pick_tablet() {
@@ -27,17 +30,14 @@ fn main() {
 				NoTabletConnector::Cancelled => 0,
 				NoTabletConnector::NoDevicesAvailable => {
 					nwg::error_message(
-						"Error",
-						"There are no tablet devices available on the system");
-					1
+						&crate::strings::errors::title(),
+						&crate::strings::errors::no_tablets_available());
+					0
 				}
 				NoTabletConnector::WindowCreationError(what) => {
-					let message = format!(
-						"Could not create device prompt window: {}",
-						what);
 					nwg::error_message(
-						"Error",
-						&message);
+						&crate::strings::errors::title(),
+						&crate::strings::errors::device_prompt_creation_failed(what));
 					1
 				}
 			};
@@ -51,12 +51,9 @@ fn main() {
 	let device = match device {
 		Some(device) => device,
 		None => {
-			let message = format!(
-				"Could not find {:04x}:{:04x}. Has the tablet been disconnected?",
-				information.vendor(), information.product());
 			nwg::error_message(
-				"Tablet",
-				&message);
+				&crate::strings::errors::title(),
+				&crate::strings::errors::tablet_not_found(information));
 
 			std::process::exit(1);
 		}
@@ -64,31 +61,18 @@ fn main() {
 	let mut device = match device.connect() {
 		Ok(device) => device,
 		Err(what) => {
-			let message = format!(
-				"\
-					Could not connect to {:04x}:{:04x}: {}.\n\n\
-					\
-					Error: {:?}\
-				",
-				information.vendor(),
-				information.product(),
-				what, what);
-
 			nwg::error_message(
-				"Tablet",
-				&message);
+				&crate::strings::errors::title(),
+				&crate::strings::errors::tablet_connection_failed(information, what));
 
 			std::process::exit(1);
 		}
 	};
 
 	if let Err(what) = window::manage(device) {
-		let message = format!(
-			"A fatal error has occurred: {}",
-			what);
 		nwg::error_message(
-			"Tablet",
-			&message);
+			&crate::strings::errors::title(),
+			&crate::strings::errors::management_failed(what));
 
 		std::process::exit(1);
 	}

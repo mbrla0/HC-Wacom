@@ -49,62 +49,66 @@ pub struct ManagementWindow {
 
 	/// The top level window this controller is contained in.
 	#[nwg_control(
-	title: "Tablet",
-	flags: "WINDOW|MINIMIZE_BOX",
-	center: true,
-	icon: Some(&data.icon),
-	size: (800, 600)
+		title: "Tablet",
+		flags: "WINDOW|MINIMIZE_BOX",
+		center: true,
+		icon: Some(&data.icon),
+		size: (800, 600)
 	)]
 	#[nwg_events(
-	OnInit: [Self::init],
-	OnWindowClose: [Self::on_exit]
+		OnInit: [Self::init],
+		OnWindowClose: [Self::on_exit]
 	)]
 	window: nwg::Window,
 
 	/// The controller managing the display of the pen bitmap.
 	#[nwg_control(
-	background_color: Some([255, 255, 255]),
-	position: (10, 30)
+		background_color: Some([255, 255, 255]),
+		position: (10, 40)
 	)]
 	display: nwg::ImageFrame,
 
 	/// Label for the device display.
 	#[nwg_control(
-	text: "Screen Controls",
-	position: (10, 10),
-	size: (100, 20)
+		position: (10, 12),
+		size: (100, 20)
 	)]
 	display_label: nwg::Label,
 
 	/// Button for clearing the signature.
 	#[nwg_control(
-	text: "Clear",
-	position: (10, 140)
+		position: (10, 150)
 	)]
 	#[nwg_events(
-	OnButtonClick: [Self::on_clear_pressed]
+		OnButtonClick: [Self::on_clear_pressed]
 	)]
 	display_clear_btn: nwg::Button,
 
 	/// Button for painting the signature.
 	#[nwg_control(
-	text: "Paint",
-	position: (110, 140)
+		position: (110, 150)
 	)]
 	#[nwg_events(
-	OnButtonClick: [Self::on_paint_pressed]
+		OnButtonClick: [Self::on_paint_pressed]
 	)]
-	display_playback_btn: nwg::Button,
+	display_paint_btn: nwg::Button,
+
+	/// Button for accessing the help dialog box.
+	#[nwg_control()]
+	#[nwg_events(
+		OnButtonClick: [Self::on_help_pressed]
+	)]
+	help_btn: nwg::Button,
 
 	/// The timer object whose job is to fire a callback for pulling in events
 	/// from the tablet and updating user interface displays from tablet data.
 	#[nwg_control(
-	interval: std::time::Duration::new(0, 40_000_000),
-	active: false,
-	lifetime: None,
+		interval: std::time::Duration::new(0, 40_000_000),
+		active: false,
+		lifetime: None,
 	)]
 	#[nwg_events(
-	OnTimerTick: [Self::on_update]
+		OnTimerTick: [Self::on_update]
 	)]
 	update: nwg::AnimationTimer,
 
@@ -124,7 +128,7 @@ pub struct ManagementWindow {
 	/// The notification channel through which we know the painting is done.
 	#[nwg_control()]
 	#[nwg_events(
-	OnNotice: [Self::on_paint_done]
+		OnNotice: [Self::on_paint_done]
 	)]
 	display_paint_done: nwg::Notice,
 
@@ -144,7 +148,8 @@ impl ManagementWindow {
 			display: Default::default(),
 			display_label: Default::default(),
 			display_clear_btn: Default::default(),
-			display_playback_btn: Default::default(),
+			display_paint_btn: Default::default(),
+			help_btn: Default::default(),
 			update: Default::default(),
 			locked: RefCell::new(false),
 			device,
@@ -160,7 +165,7 @@ impl ManagementWindow {
 	fn lock(&self) {
 		self.device.inking(false);
 		self.display_clear_btn.set_enabled(false);
-		self.display_playback_btn.set_enabled(false);
+		self.display_paint_btn.set_enabled(false);
 		*self.locked.borrow_mut() = true;
 	}
 
@@ -168,7 +173,7 @@ impl ManagementWindow {
 	fn unlock(&self) {
 		self.device.inking(true);
 		self.display_clear_btn.set_enabled(true);
-		self.display_playback_btn.set_enabled(true);
+		self.display_paint_btn.set_enabled(true);
 		*self.locked.borrow_mut() = false;
 	}
 
@@ -183,9 +188,15 @@ impl ManagementWindow {
 		mng_cmd_try!(self, self.device.clear());
 		mng_cmd_try!(self, self.device.inking(true));
 
-		self.update(true);
+		self.window.set_text(&crate::strings::manager::title());
+		self.help_btn.set_text(&crate::strings::manager::help_btn());
+		self.display_paint_btn.set_text(&crate::strings::manager::display_paint_btn());
+		self.display_clear_btn.set_text(&crate::strings::manager::display_clear_btn());
+		self.display_label.set_text(&crate::strings::manager::display_label());
 
+		self.update(true);
 		self.update.start();
+
 		self.window.set_visible(true);
 		self.window.set_focus();
 	}
@@ -201,6 +212,14 @@ impl ManagementWindow {
 		mng_cmd_try!(self, self.device.inking(true));
 
 		self.update(true);
+	}
+
+	/// Called when an intent for opening the help dialog has been fired.
+	fn on_help_pressed(&self) {
+		nwg::modal_info_message(
+			&self.window,
+			crate::strings::manager::help_btn(),
+			crate::strings::manager::help());
 	}
 
 	/// Called when an intent for painting the device data has been fired.
@@ -226,8 +245,8 @@ impl ManagementWindow {
 				},
 				Err(what) => {
 					nwg::error_message(
-						"Tablet",
-						&format!("Could not display paint controls: {}", what));
+						&crate::strings::errors::title(),
+						&crate::strings::errors::signature_paint_pick_area_failed(what));
 					sender.notice();
 					return
 				}
@@ -286,18 +305,25 @@ impl ManagementWindow {
 			self.display.set_bitmap(Some(&bitmap));
 
 			/* Move the UI around. */
-			self.window.set_size(canvas.width() + 20, canvas.height() + 75);
+			self.window.set_size(canvas.width() + 20, canvas.height() + 85);
 			let (_, btn_height) = self.display_clear_btn.size();
+			let (_, lbl_height) = self.display_label.size();
 
+			self.display_label.set_size(
+				canvas.width().saturating_sub(80),
+				lbl_height);
+			self.help_btn.set_position(
+				canvas.width().saturating_sub(90) as i32,
+				7);
 			self.display_clear_btn.set_size(
 				(canvas.width() / 2).saturating_sub(5),
 				btn_height);
-			self.display_playback_btn.set_size(
+			self.display_paint_btn.set_size(
 				(canvas.width() / 2).saturating_sub(5),
 				btn_height);
-			self.display_playback_btn.set_position(
+			self.display_paint_btn.set_position(
 				(20 + (canvas.width() / 2).saturating_sub(5)) as i32,
-				140);
+				150);
 		}
 	}
 

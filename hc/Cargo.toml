@@ -28,3 +28,6 @@ features = [
     "bmp"
 ]
 
+[features]
+lang-en_US = []
+lang-pt_BR = []

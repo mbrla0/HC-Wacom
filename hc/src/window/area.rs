@@ -573,16 +573,14 @@ impl AreaSelection {
 		/* Paint the tooltip UI. */
 		let _ = {
 			let string = CString::new(
-				"Select a region by clicking and dragging. Press and hold \
-				the Alt key to fix its aspect ratio. When done, press 'e' to \
-				paint on to the selected region or 'q' to cancel.")
+				crate::strings::area::tip())
 				.unwrap();
 
 			let _ = gdi::SetTextAlign(target_dc, gdi::TA_CENTER);
 			let _ = gdi::TextOutA(
 				target_dc,
 				width / 2,
-				height - 30,
+				height - 40,
 				string.as_ptr(),
 				string.as_bytes().len() as _);
 		};

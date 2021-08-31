@@ -1,6 +1,7 @@
 use crate::robot::ScreenArea;
 use std::cell::RefCell;
 use std::convert::TryFrom;
+use std::ffi::CString;
 
 /// Display a window control that lets the user select a rectangular region on
 /// the screen. This is intended for use with the signature painting
@@ -33,20 +34,23 @@ pub struct AreaSelectionParameters {
 pub struct AreaSelection {
 	/// The top level window this controller is contained in.
 	#[nwg_control(
-	title: "Area Selection",
-	flags: "WINDOW",
+		title: "Area Selection",
+		flags: "WINDOW",
 	)]
 	#[nwg_events(
-	OnInit: [Self::init],
-	OnWindowClose: [Self::on_close],
-	OnPaint: [Self::on_paint],
-	OnMouseMove: [Self::on_mouse_move],
-	OnMousePress: [Self::on_mouse_press(SELF, EVT)],
-	OnKeyPress: [Self::on_key_press(SELF, EVT_DATA)]
+		OnInit: [Self::init],
+		OnWindowClose: [Self::on_close],
+		OnPaint: [Self::on_paint],
+		OnMouseMove: [Self::on_mouse_move],
+		OnMousePress: [Self::on_mouse_press(SELF, EVT)],
+		OnKeyPress: [Self::on_key_press(SELF, EVT_DATA)],
+		OnSysKeyPress: [Self::on_key_press(SELF, EVT_DATA)],
+		OnKeyRelease: [Self::on_key_release(SELF, EVT_DATA)],
+		OnSysKeyRelease: [Self::on_key_release(SELF, EVT_DATA)]
 	)]
 	window: nwg::Window,
 
-	/// The bitmap representing a screen capture.
+	/// The bitmap containing a screen capture.
 	screen: RefCell<winapi::shared::windef::HBITMAP>,
 
 	/// The parameters for the selection operation.
@@ -54,9 +58,11 @@ pub struct AreaSelection {
 
 	/// Whether the mouse is currently being pressed.
 	mouse_pressed: RefCell<bool>,
-
+	/// Whether the rectangle is currently bound to the preferred aspect ratio.
+	lock_to_preferred_aspect_ratio: RefCell<bool>,
 	/// The position of the mouse when the button was pressed.
 	mouse_anchor: RefCell<(i32, i32)>,
+
 
 	/// The current area selection on the screen.
 	selection: RefCell<ScreenArea>,
@@ -75,6 +81,7 @@ impl AreaSelection {
 			screen: RefCell::new(std::ptr::null_mut()),
 			params,
 			mouse_pressed: RefCell::new(false),
+			lock_to_preferred_aspect_ratio: RefCell::new(false),
 			mouse_anchor: RefCell::new((0, 0)),
 			selection: RefCell::new(ScreenArea {
 				x: 0,
@@ -127,9 +134,22 @@ impl AreaSelection {
 				self.channel.send(Err(PickPhysicalAreaError::Cancelled));
 				nwg::stop_thread_dispatch()
 			},
+			nwg::keys::ALT =>
+				*self.lock_to_preferred_aspect_ratio.borrow_mut() = true,
 			_ => {}
 		}
 	}
+
+	/// Called when a key on the keyboard has been released.
+	fn on_key_release(&self, data: &nwg::EventData) {
+		let key = data.on_key();
+		match key as _ {
+			nwg::keys::ALT =>
+				*self.lock_to_preferred_aspect_ratio.borrow_mut() = false,
+			_ => {}
+		}
+	}
+
 
 	/// Called when the mouse has moved on the screen.
 	fn on_mouse_move(&self) {
@@ -144,20 +164,48 @@ impl AreaSelection {
 		let ax = ax.max(0);
 		let ay = ay.max(0);
 
-		let (x, width) = if x < ax {(
-			x,
-			ax - x
-		)} else {(
-			ax,
-			x - ax
-		)};
-		let (y, height) = if y < ay {(
-			y,
-			ay - y,
-		)} else {(
-			ay,
-			y - ay
-		)};
+		let (x, y, width, height) = if !*self.lock_to_preferred_aspect_ratio.borrow() {
+			let (x, width) = if x < ax {
+				(
+					x,
+					ax - x
+				)
+			} else {
+				(
+					ax,
+					x - ax
+				)
+			};
+			let (y, height) = if y < ay {
+				(
+					y,
+					ay - y,
+				)
+			} else {
+				(
+					ay,
+					y - ay
+				)
+			};
+
+			(x, y, width, height)
+		} else {
+			let width = (x - ax).max(0);
+			let height = (y - ay).max(0);
+
+			let w0 = self.params.preferred_dimensions.0 as f64;
+			let h0 = self.params.preferred_dimensions.1 as f64;
+
+			let w = width as f64;
+			let h = height as f64;
+
+			let dh = (h * w0 - w * h0) / w0;
+			let height = (h - dh).round() as i32;
+
+			(ax, ay, width, height)
+		};
+
+
 		*self.selection.borrow_mut() = ScreenArea {
 			x,
 			y,
@@ -520,6 +568,23 @@ impl AreaSelection {
 			let _ = gdi::SelectObject(dc, replaced);
 			let _ = gdi::DeleteObject(bitmap as _);
 			let _ = gdi::DeleteDC(dc);
+		};
+
+		/* Paint the tooltip UI. */
+		let _ = {
+			let string = CString::new(
+				"Select a region by clicking and dragging. Press and hold \
+				the Alt key to fix its aspect ratio. When done, press 'e' to \
+				paint on to the selected region or 'q' to cancel.")
+				.unwrap();
+
+			let _ = gdi::SetTextAlign(target_dc, gdi::TA_CENTER);
+			let _ = gdi::TextOutA(
+				target_dc,
+				width / 2,
+				height - 30,
+				string.as_ptr(),
+				string.as_bytes().len() as _);
 		};
 
 		/* Copy from the back buffer to the front buffer. */

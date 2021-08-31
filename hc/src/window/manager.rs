@@ -210,9 +210,13 @@ impl ManagementWindow {
 		let path = self.path.borrow().clone();
 		let sender = self.display_paint_done.sender();
 
+		let canvas = self.canvas.borrow();
+		let width = canvas.width();
+		let height = canvas.height();
+
 		std::thread::spawn(move || {
 			let area = super::pick_physical_area(AreaSelectionParameters {
-				preferred_dimensions: (800, 600)
+				preferred_dimensions: (width, height)
 			});
 			let area = match area {
 				Ok(area) => area,

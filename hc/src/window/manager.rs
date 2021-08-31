@@ -255,8 +255,8 @@ impl ManagementWindow {
 			Playback {
 				path,
 				target: area,
-				delta: Duration::from_secs(4),
-				steps: unsafe { NonZeroU32::new_unchecked(10000) }
+				delta: Duration::from_secs(8),
+				steps: unsafe { NonZeroU32::new_unchecked(5000) }
 			}.play_and_notify(sender);
 		});
 	}

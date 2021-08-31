@@ -222,7 +222,8 @@ impl Drop for RawTabletConnection {
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub struct Information {
 	id_vendor: u16,
-	id_product: u16
+	id_product: u16,
+	bcd_device: u16,
 }
 impl Information {
 	/// Vendor identification number of this device.
@@ -234,6 +235,9 @@ impl Information {
 	pub fn product(&self) -> u16 {
 		self.id_product
 	}
+
+	/// The device identification number.
+	pub fn device(&self) -> u16 { self.bcd_device }
 }
 
 /// A connector to a tablet device.
@@ -250,7 +254,8 @@ impl Connector {
 	pub fn info(&self) -> Information {
 		Information {
 			id_vendor: self.device.usbDevice.idVendor,
-			id_product: self.device.usbDevice.idProduct
+			id_product: self.device.usbDevice.idProduct,
+			bcd_device: self.device.usbDevice.bcdDevice
 		}
 	}
 

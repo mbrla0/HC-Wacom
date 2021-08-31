@@ -170,6 +170,9 @@ impl std::fmt::Display for ConnectorDisplay {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		let info = self.0.as_ref().unwrap();
 
-		write!(f, "{:04x}:{:04x}", info.vendor(), info.product())
+		write!(f, "{} - {:04x}:{:04x}",
+			info.device(),
+			info.vendor(),
+			info.product())
 	}
 }

@@ -4,7 +4,7 @@ use nwg::NativeUi;
 use std::borrow::BorrowMut;
 use crate::path::{EventCanvas, EventPath};
 use stu::{Tablet, Queue, Capability};
-use crate::robot::{Playback, PhysicalArea};
+use crate::robot::{Playback, ScreenArea};
 use std::time::Duration;
 use std::num::NonZeroU32;
 use std::convert::TryFrom;
@@ -201,7 +201,7 @@ impl std::fmt::Display for ConnectorDisplay {
 /// functionality.
 pub fn pick_physical_area(
 	parameters: AreaSelectionParameters)
-	-> Result<PhysicalArea, PickPhysicalAreaError> {
+	-> Result<ScreenArea, PickPhysicalAreaError> {
 
 	let (tx, rx) = std::sync::mpsc::channel();
 	let window = AreaSelection::new(parameters, tx);
@@ -253,15 +253,15 @@ pub struct AreaSelection {
 	mouse_anchor: RefCell<(i32, i32)>,
 
 	/// The current area selection on the screen.
-	selection: RefCell<PhysicalArea>,
+	selection: RefCell<ScreenArea>,
 
 	/// The channel through which we report our result.
-	channel: std::sync::mpsc::Sender<Result<PhysicalArea, PickPhysicalAreaError>>,
+	channel: std::sync::mpsc::Sender<Result<ScreenArea, PickPhysicalAreaError>>,
 }
 impl AreaSelection {
 	fn new(
 		params: AreaSelectionParameters,
-		channel:std::sync::mpsc::Sender<Result<PhysicalArea, PickPhysicalAreaError>>)
+		channel:std::sync::mpsc::Sender<Result<ScreenArea, PickPhysicalAreaError>>)
 		-> Self {
 
 		Self {
@@ -270,7 +270,7 @@ impl AreaSelection {
 			params,
 			mouse_pressed: RefCell::new(false),
 			mouse_anchor: RefCell::new((0, 0)),
-			selection: RefCell::new(PhysicalArea {
+			selection: RefCell::new(ScreenArea {
 				x: 0,
 				y: 0,
 				width: 0,
@@ -288,9 +288,9 @@ impl AreaSelection {
 					let anchor = nwg::GlobalCursor::position();
 
 					*self.mouse_anchor.borrow_mut() = anchor;
-					*self.selection.borrow_mut() = PhysicalArea {
-						x: anchor.0.max(0) as u32,
-						y: anchor.1.max(0) as u32,
+					*self.selection.borrow_mut() = ScreenArea {
+						x: anchor.0.max(0),
+						y: anchor.1.max(0),
 						width: 0,
 						height: 0
 					};
@@ -331,12 +331,12 @@ impl AreaSelection {
 
 		/* Resize the physical selection region. */
 		let (x, y) = nwg::GlobalCursor::position();
-		let x = x.max(0) as u32;
-		let y = y.max(0) as u32;
+		let x = x.max(0);
+		let y = y.max(0);
 
 		let (ax, ay) = *self.mouse_anchor.borrow();
-		let ax = ax.max(0) as u32;
-		let ay = ay.max(0) as u32;
+		let ax = ax.max(0);
+		let ay = ay.max(0);
 
 		let (x, width) = if x < ax {(
 			x,
@@ -352,11 +352,11 @@ impl AreaSelection {
 			ay,
 			y - ay
 		)};
-		*self.selection.borrow_mut() = PhysicalArea {
+		*self.selection.borrow_mut() = ScreenArea {
 			x,
 			y,
-			width,
-			height
+			width: width as u32,
+			height: height as u32
 		};
 
 		/* Mark the window as being dirty. */
@@ -639,12 +639,12 @@ impl AreaSelection {
 				std::slice::from_raw_parts_mut(buffer as *mut u8, length)
 			};
 			for (i, slice) in buffer.chunks_exact_mut(4).enumerate() {
-				let x = (i % width.abs() as usize) as u32;
-				let y = (i / width.abs() as usize) as u32;
+				let x = (i % width.abs() as usize) as i32;
+				let y = (i / width.abs() as usize) as i32;
 
 				let selection = self.selection.borrow();
-				let horizontal = x >= selection.x && x < selection.x + selection.width;
-				let vertical = y >= selection.y && y < selection.y + selection.height;
+				let horizontal = x >= selection.x && x < selection.x + selection.width as i32;
+				let vertical = y >= selection.y && y < selection.y + selection.height as i32;
 
 				slice[0] = 0;
 				slice[1] = 0;
@@ -1247,17 +1247,36 @@ impl ManagementWindow {
 	/// Called when an intent for painting the device data has been fired.
 	fn on_paint_pressed(&self) {
 		self.lock();
-		Playback {
-			path: self.path.borrow().clone(),
-			target: PhysicalArea {
-				x: 10,
-				y: 50,
-				width: 1316,
-				height: 668
-			},
-			delta: Duration::from_secs(4),
-			steps: unsafe { NonZeroU32::new_unchecked(10000) }
-		}.play_and_notify(self.display_paint_done.sender());
+
+		let path = self.path.borrow().clone();
+		let sender = self.display_paint_done.sender();
+
+		std::thread::spawn(move || {
+			let area = pick_physical_area(AreaSelectionParameters {
+				preferred_dimensions: (800, 600)
+			});
+			let area = match area {
+				Ok(area) => area,
+				Err(PickPhysicalAreaError::Cancelled) => {
+					sender.notice();
+					return
+				},
+				Err(what) => {
+					nwg::error_message(
+						"Tablet",
+						&format!("Could not display paint controls: {}", what));
+					sender.notice();
+					return
+				}
+			};
+
+			Playback {
+				path,
+				target: area,
+				delta: Duration::from_secs(4),
+				steps: unsafe { NonZeroU32::new_unchecked(10000) }
+			}.play_and_notify(sender);
+		});
 	}
 
 	/// Called when the painting of the signature has been completed.

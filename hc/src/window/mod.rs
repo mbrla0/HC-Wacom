@@ -11,6 +11,13 @@ mod area;
 /// Initialize globals required by the windowing interface.
 pub fn init() {
 	nwg::init().expect("Could not initialize Win32 UI framework.");
+	unsafe {
+		/* Prevent the system from giving us the wrong system parameters, since
+		 * we need to work with physical pixels, rather than with logical ones.
+		 */
+		winapi::um::winuser::SetProcessDPIAware();
+	}
+
 	nwg::Font::set_global_family("Segoe UI").unwrap();
 
 	let mut font = Default::default();

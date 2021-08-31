@@ -127,11 +127,11 @@ impl AreaSelection {
 					return
 				}
 
-				self.channel.send(Ok(area));
+				let _ = self.channel.send(Ok(area));
 				nwg::stop_thread_dispatch();
 			},
 			nwg::keys::_Q => {
-				self.channel.send(Err(PickPhysicalAreaError::Cancelled));
+				let _ = self.channel.send(Err(PickPhysicalAreaError::Cancelled));
 				nwg::stop_thread_dispatch()
 			},
 			nwg::keys::ALT =>
@@ -760,141 +760,6 @@ impl Drop for AreaSelection {
 			}
 		}
 	}
-}
-
-/// Writes a Windows bitmap to a buffer in memory.
-unsafe fn bitmap_to_image(
-	hdc: winapi::shared::windef::HDC,
-	bitmap: winapi::shared::windef::HBITMAP)
-	-> Result<image::ImageBuffer<image::Rgb<u8>, Vec<u8>>, String> {
-
-	use winapi::um::wingdi as gdi;
-	use winapi::um::errhandlingapi::GetLastError;
-
-	/* Pull the bytes in from Windows into an internal buffer. */
-	let mut info = std::mem::zeroed::<gdi::BITMAPINFO>();
-	info.bmiHeader.biSize = std::mem::size_of::<gdi::BITMAPINFO>() as _;
-
-	let result = gdi::GetDIBits(
-		hdc,
-		bitmap,
-		0,
-		0,
-		std::ptr::null_mut(),
-		&mut info,
-		gdi::DIB_RGB_COLORS);
-	if result == 0 {
-		return Err(format!(
-			"GetDIBits({:p}, {:p}, {}, {}, {:p}, {:p}, {}) failed: 0x{:08x}",
-			hdc,
-			bitmap,
-			0,
-			0,
-			std::ptr::null_mut::<()>(),
-			&mut info,
-			gdi::DIB_RGB_COLORS,
-			GetLastError()))
-	}
-
-	info.bmiHeader.biHeight = -info.bmiHeader.biHeight;
-	info.bmiHeader.biCompression = gdi::BI_RGB;
-	info.bmiHeader.biBitCount = 24;
-
-	let mut buffer = {
-		let width = usize::try_from(info.bmiHeader.biWidth)
-			.map_err(|what| {
-				format!("The biWidth value ({}) does not fit in a usize: {}",
-					info.bmiHeader.biWidth, what)
-			})?;
-		let height = usize::try_from(-info.bmiHeader.biHeight)
-			.map_err(|what| {
-				format!("The biHeight value ({}) does not fit in a usize: {}",
-					-info.bmiHeader.biHeight, what)
-			})?;
-		let bytes_per_pixel = info.bmiHeader.biBitCount as usize / 8;
-		let bytes = width.checked_mul(height)
-			.and_then(|pixels| pixels.checked_mul(bytes_per_pixel))
-			.ok_or_else(|| {
-				format!("The number of bytes for the bitmap ({} * {} * {}) does \
-					not fit in a usize",
-					width, height, bytes_per_pixel)
-			})?;
-
-		vec![0u8; bytes]
-	};
-
-	let (width, height) = {
-		let width = u32::try_from(info.bmiHeader.biWidth)
-			.map_err(|what| {
-				format!("The biWidth value ({}) does not fit in a u32: {}",
-					info.bmiHeader.biWidth, what)
-			})?;
-		let height = u32::try_from(-info.bmiHeader.biHeight)
-			.map_err(|what| {
-				format!("The biHeight value ({}) does not fit in a u32: {}",
-					-info.bmiHeader.biHeight, what)
-			})?;
-
-		(width, height)
-	};
-
-	let result = gdi::GetDIBits(
-		hdc,
-		bitmap,
-		0,
-		info.bmiHeader.biHeight as _,
-		buffer.as_mut_ptr() as _,
-		&mut info,
-		gdi::DIB_RGB_COLORS);
-	if result == 0 {
-		return Err(format!(
-			"GetDIBits({:p}, {:p}, {}, {}, {:p}, {:p}, {}) failed: 0x{:08x}",
-			hdc,
-			bitmap,
-			0,
-			info.bmiHeader.biHeight as u32,
-			buffer.as_mut_ptr(),
-			&mut info,
-			gdi::DIB_RGB_COLORS,
-			GetLastError()))
-	}
-
-	/* Convert to a bitmap in memory. */
-	let image = match info.bmiHeader.biBitCount {
-		24 => {
-			image::ImageBuffer::from_fn(
-				width,
-				height,
-				|x, y| {
-					let base = (y * width + x) * 3;
-					let base = base as usize;
-
-					let r = buffer[base + 2];
-					let g = buffer[base + 1];
-					let b = buffer[base + 0];
-
-					image::Rgb([r, g, b])
-				})
-		},
-		32 => {
-			image::ImageBuffer::from_fn(
-				width,
-				height,
-				|x, y| {
-					let base = (y * width + x) * 4;
-					let base = base as usize;
-
-					let r = buffer[base + 3];
-					let g = buffer[base + 2];
-					let b = buffer[base + 1];
-
-					image::Rgb([r, g, b])
-				})
-		},
-		_ => unreachable!()
-	};
-
-	Ok(image)
 }
 
 /// Enumeration of reasons why prompting the user to pick a physical region on

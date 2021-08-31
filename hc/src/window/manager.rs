@@ -163,7 +163,7 @@ impl ManagementWindow {
 
 	/// Locks all of the controls in this window.
 	fn lock(&self) {
-		self.device.inking(false);
+		mng_cmd_try!(self, self.device.inking(false));
 		self.display_clear_btn.set_enabled(false);
 		self.display_paint_btn.set_enabled(false);
 		*self.locked.borrow_mut() = true;
@@ -171,7 +171,7 @@ impl ManagementWindow {
 
 	/// Unlocks all of the controls in this window.
 	fn unlock(&self) {
-		self.device.inking(true);
+		mng_cmd_try!(self, self.device.inking(true));
 		self.display_clear_btn.set_enabled(true);
 		self.display_paint_btn.set_enabled(true);
 		*self.locked.borrow_mut() = false;

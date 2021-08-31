@@ -36,6 +36,7 @@ impl<T: ?Sized> Handle<T> {
 	/// pointer obtained from the [`as_ptr()`] function.
 	///
 	/// [`as_ptr()`]: Self::as_ptr
+	#[allow(dead_code)]
 	pub unsafe fn transmute<U>(self) -> Handle<U> {
 		Handle(self.0 as *mut _)
 	}

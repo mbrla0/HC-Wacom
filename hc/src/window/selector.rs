@@ -3,14 +3,14 @@ use std::rc::Rc;
 
 /// Prompt the user to pick a tablet device to connect to.
 pub fn pick_tablet() -> Result<stu::Information, NoTabletConnector> {
-	let mut devices = stu::list_devices()
+	let devices = stu::list_devices()
 		.map(|connector| connector.info())
 		.collect::<Vec<_>>();
 	if devices.len() == 0 {
 		return Err(NoTabletConnector::NoDevicesAvailable)
 	}
 
-	let mut channel = Rc::new(RefCell::new(None));
+	let channel = Rc::new(RefCell::new(None));
 	let _ = {
 		let selection = DeviceSelection::new(devices, channel.clone());
 		let _selection = nwg::NativeUi::build_ui(selection)

@@ -58,7 +58,7 @@ fn main() {
 			std::process::exit(1);
 		}
 	};
-	let mut device = match device.connect() {
+	let device = match device.connect() {
 		Ok(device) => device,
 		Err(what) => {
 			nwg::error_message(

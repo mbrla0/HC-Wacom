@@ -109,14 +109,6 @@ pub(crate) struct InternalError {
 	stu_code: std::os::raw::c_int,
 }
 impl InternalError {
-	/// Whether this error indicates a misbehavior in this crate.
-	pub fn internal_misbehavior(&self) -> bool {
-		match &self.code {
-			InternalErrorCode::Exception(_) => false,
-			_ => true
-		}
-	}
-
 	/// Unwraps this error to an exception, if possible.
 	pub fn unwrap_to_general(self) -> Error {
 		let exception = match self.code {

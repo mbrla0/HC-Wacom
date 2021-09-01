@@ -10,14 +10,14 @@ pub mod manager {
 			\n\
 			\n1) No TLCE digital, clique em \"Adicionar Assinatura\";\
 			\n2) Solicite ao paciente que assine no dispositivo;\
-			\n3) Clique em Pintar e vá para a janela do TCLE;\
+			\n3) Vá para a janela do TCLE e clique em Assinar;\
 			\n4) Selecione a área de assinatura;\
 			\n5) Aperte a Tecla 'e' para adicionar a assitura;\
 			\n6) Clique em \"Salvar Assintura\" no TCLE digital.\
 		"
 	}
 	pub fn display_clear_btn() -> &'static str { "Limpar" }
-	pub fn display_paint_btn() -> &'static str { "Pintar" }
+	pub fn display_paint_btn() -> &'static str { "Assinar" }
 	pub fn display_label() -> &'static str { "Oncologia Clínica - HC FMRP - USP" }
 }
 

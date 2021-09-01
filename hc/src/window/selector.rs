@@ -46,7 +46,7 @@ pub enum NoTabletConnector {
 #[derive(nwd::NwgUi)]
 pub struct DeviceSelection {
 	/// The icon we're gonna be using for the window.
-	#[nwg_resource(source_system: Some(nwg::OemIcon::Information))]
+	#[nwg_resource(source_bin: Some(crate::window::ICON))]
 	icon: nwg::Icon,
 
 	/// The top level window this controller is contained in.

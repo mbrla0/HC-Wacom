@@ -1,4 +1,7 @@
 
+/// The icon to be used by this application.
+const ICON: &'static [u8] = include_bytes!("icon.ico");
+
 /// Tablet management window and logic.
 mod manager;
 

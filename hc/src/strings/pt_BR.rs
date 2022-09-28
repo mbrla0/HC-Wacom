@@ -1,9 +1,8 @@
-
-
 /// Strings used in the tablet management window.
 pub mod manager {
 	pub fn title() -> &'static str { "Assinatura para Termo de Consentimento" }
 	pub fn help_btn() -> &'static str { "Ajuda" }
+	pub fn bitmap_upload_btn() -> &'static str { "Usar Imagem" }
 	pub fn help() -> &'static str {
 		"\
 			Instruções para coleta de assinatura.\
@@ -56,6 +55,8 @@ pub mod bitmap {
 
 /// Strings used in error messages.
 pub mod errors {
+	use nwg::NwgError;
+
 	pub fn title() -> &'static str { "Erro" }
 	pub fn signature_paint_pick_area_failed(
 		what: crate::window::PickPhysicalAreaError) -> String {
@@ -97,6 +98,9 @@ pub mod errors {
 		format!(
 			"Ocorreu um erro durante a supervisão do dispositivo: {}",
 			what)
+	}
+	pub fn window_creation(what: NwgError) -> String {
+		format!("Ocorreu um erro ao tentar abrir a janela: {}", what)
 	}
 	pub fn invalid_file() -> &'static str {
 		"O arquivo selecionado é inválido"

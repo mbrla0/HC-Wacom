@@ -1,5 +1,4 @@
 use std::collections::btree_map::BTreeMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 use image::Luma;
 use stu::Event;

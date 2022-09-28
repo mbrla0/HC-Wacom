@@ -5,6 +5,7 @@ use crate::window::area::PickPhysicalAreaError;
 use crate::robot::Playback;
 use std::time::Duration;
 use std::num::NonZeroU32;
+use crate::BitmapError;
 use crate::window::AreaSelectionParameters;
 
 /// Manage the given tablet device.
@@ -100,6 +101,13 @@ pub struct ManagementWindow {
 	)]
 	help_btn: nwg::Button,
 
+	/// Button for accessing the bitmap upload functionality.
+	#[nwg_control()]
+	#[nwg_events(
+		OnButtonClick: [Self::on_bitmap_load_pressed]
+	)]
+	bitmap_upload_btn: nwg::Button,
+
 	/// The timer object whose job is to fire a callback for pulling in events
 	/// from the tablet and updating user interface displays from tablet data.
 	#[nwg_control(
@@ -157,6 +165,7 @@ impl ManagementWindow {
 			display_clear_btn: Default::default(),
 			display_paint_btn: Default::default(),
 			help_btn: Default::default(),
+			bitmap_upload_btn: Default::default(),
 			update: Default::default(),
 			locked: RefCell::new(false),
 			device,
@@ -198,6 +207,7 @@ impl ManagementWindow {
 
 		self.window.set_text(&crate::strings::manager::title());
 		self.help_btn.set_text(&crate::strings::manager::help_btn());
+		self.bitmap_upload_btn.set_text(&crate::strings::manager::bitmap_upload_btn());
 		self.display_paint_btn.set_text(&crate::strings::manager::display_paint_btn());
 		self.display_clear_btn.set_text(&crate::strings::manager::display_clear_btn());
 		self.display_label.set_text(&crate::strings::manager::display_label());
@@ -236,7 +246,28 @@ impl ManagementWindow {
 		let channel = self.bitmap_window_done.sender();
 
 		std::thread::spawn(move || {
-			super::bitmap::run(Some(channel));
+			match super::bitmap::run(Some(channel)) {
+				Ok(_) => {},
+				Err(BitmapError::Cancelled) => {
+					channel.notice();
+				},
+				Err(what) => {
+					nwg::error_message(
+						&crate::strings::errors::title(),
+						&*match what {
+							BitmapError::Cancelled => unreachable!(),
+							BitmapError::InvalidFile(what) => format!(
+								"{}: {}",
+								crate::strings::errors::invalid_file(),
+								what),
+							BitmapError::FileNotFound =>
+								crate::strings::errors::file_not_found().to_string(),
+							BitmapError::WindowCreationError(what) =>
+								crate::strings::errors::window_creation(what)
+						});
+					channel.notice();
+				}
+			}
 		});
 	}
 
@@ -339,13 +370,16 @@ impl ManagementWindow {
 				canvas.width().saturating_sub(90) as i32,
 				7);
 			self.display_clear_btn.set_size(
-				(canvas.width() / 2).saturating_sub(5),
+				(canvas.width() / 3).saturating_sub(5),
 				btn_height);
 			self.display_paint_btn.set_size(
-				(canvas.width() / 2).saturating_sub(5),
+				(canvas.width() / 3).saturating_sub(5),
 				btn_height);
 			self.display_paint_btn.set_position(
-				(20 + (canvas.width() / 2).saturating_sub(5)) as i32,
+				(20 + (canvas.width() / 3).saturating_sub(5)) as i32,
+				150);
+			self.bitmap_upload_btn.set_position(
+				(20 + (canvas.width() / 3 * 2).saturating_sub(5)) as i32,
 				150);
 		}
 	}

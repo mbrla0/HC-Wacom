@@ -244,7 +244,6 @@ impl BitmapWindow {
 
 	/// Called when the painting of the signature has been completed.
 	fn on_paint_done(&self) {
-		println!("Done");
 		nwg::stop_thread_dispatch();
 	}
 

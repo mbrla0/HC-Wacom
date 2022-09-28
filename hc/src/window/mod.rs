@@ -11,6 +11,9 @@ mod selector;
 /// Screen area selector window and logic.
 mod area;
 
+/// Bitmap painter window and logic.
+pub(crate) mod bitmap;
+
 /// Initialize globals required by the windowing interface.
 pub fn init() {
 	nwg::init().expect("Could not initialize Win32 UI framework.");

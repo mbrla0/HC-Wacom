@@ -1,6 +1,43 @@
-use std::collections::BTreeMap;
+use std::collections::btree_map::BTreeMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
+use image::Luma;
 use stu::Event;
+
+/// Trait for structures that can produce a [`Trace`].
+///
+/// [`Trace`]: Trace
+pub trait IntoTrace {
+	/// Type of trace that will be generated.
+	type Trace<'a>: Trace
+		where Self: 'a;
+
+	/// Generate a tracing along the curve in this structure.
+	fn trace<'a>(&'a self) -> Self::Trace<'a>;
+}
+
+/// Trait for parametric curves.
+pub trait Trace {
+	/// Get the point along this path at the given time.
+	///
+	/// The minimum value for the time is `0.0`, at the start of the path, and
+	/// the maximum value is `1.0`, at the end of the path. Values greater than
+	/// the maximum or smaller than the minimum will be clamped.
+	fn get<E>(&self, t: f64, buffer: &mut E) -> usize
+		where E: Extend<Point>;
+}
+
+/// A point on the screen along a curve.
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct Point {
+	/// The position of the cursor in the horizontal axis.
+	pub x: f64,
+	/// The position of the cursor in the vertical axis.
+	pub y: f64,
+	/// Whether the pen is touching the screen at this point.
+	pub touch: bool,
+}
+
 
 /// A structure for generating pictures from events.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -179,7 +216,6 @@ impl EventPath {
 			events: Default::default()
 		}
 	}
-
 	/// Inserts a new event into this path.
 	///
 	/// If this path had already registered an event that happened at the same
@@ -188,15 +224,15 @@ impl EventPath {
 	pub fn process(&mut self, event: Event) -> Option<Event> {
 		self.events.insert(event.time(), event)
 	}
-
 	/// Clears all of the events in this path.
 	pub fn clear(&mut self) {
 		self.events.clear()
 	}
-
-	/// Generate a tracing along the curve in this structure.
-	pub fn trace(&self) -> Trace {
-		Trace {
+}
+impl IntoTrace for EventPath {
+	type Trace<'a> = EventTrace<'a>;
+	fn trace(&self) -> EventTrace {
+		EventTrace {
 			events: self.events
 				.values()
 				.collect::<Vec<_>>()
@@ -214,26 +250,23 @@ impl Default for EventPath {
 ///
 /// [`EventPath`]: EventPath
 #[derive(Debug, Clone, PartialEq)]
-pub struct Trace<'a> {
+pub struct EventTrace<'a> {
 	/// A list of events, sorted by the time they happened. This is a list
 	/// rather than other kinds of sorted containers because it allows for us to
 	/// uniformly access its elements, which avoids the clustering of events.
 	events: Box<[&'a Event]>
 }
-impl Trace<'_> {
-	/// Get the point along this path at the given time.
-	///
-	/// The minimum value for the time is `0.0`, at the start of the path, and
-	/// the maximum value is `1.0`, at the end of the path. Values greater than
-	/// the maximum or smaller than the minimum will be clamped.
-	pub fn get(&self, t: f64) -> Option<Point> {
-		if self.events.len() == 0 { return None }
+impl Trace for EventTrace<'_> {
+	fn get<E>(&self, t: f64, buffer: &mut E) -> usize
+		where E: Extend<Point> {
+		if self.events.len() == 0 { return 0 }
 		if self.events.len() == 1 {
-			return Some(Point {
+			buffer.extend(Some(Point {
 				x: self.events[0].x(),
 				y: self.events[0].y(),
 				touch: self.events[0].touching()
-			})
+			}));
+			return 1
 		}
 
 		let t = t.clamp(0.0, 1.0);
@@ -247,21 +280,126 @@ impl Trace<'_> {
 		let a = self.events[i as usize];
 		let b = self.events[j as usize];
 
-		Some(Point {
-			x: f.lerp(a.x(), b.x()),
-			y: f.lerp(a.y(), b.y()),
+		buffer.extend(Some(Point {
+			x: lerp(f, a.x(), b.x()),
+			y: lerp(f, a.y(), b.y()),
 			touch: a.touching()
-		})
+		}));
+		1
 	}
 }
 
-/// A point on the screen along a curve.
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct Point {
-	/// The position of the cursor in the horizontal axis.
-	pub x: f64,
-	/// The position of the cursor in the vertical axis.
-	pub y: f64,
-	/// Whether the pen is touching the screen at this point.
-	pub touch: bool,
+fn lerp(s: f64, a: f64, b: f64) -> f64 {
+	(1.0 - s) * a + s * b
+}
+
+/// Structure that represents a path generated from a bitmap rather than from
+/// a list of sign pad events.
+#[derive(Debug, Clone)]
+pub struct BitmapPath {
+	image: image::GrayImage
+}
+impl BitmapPath {
+	/// Creates a new bitmap path from the given image.
+	pub fn new(mut image: image::GrayImage) -> Self {
+		/* Force the image into a high-contrast format. */
+		for i in 0..image.height() {
+			for j in 0..image.width() {
+				let pixel = image.get_pixel_mut(j, i);
+				if pixel.0[0] < 20 {
+					*pixel = Luma([0])
+				} else {
+					*pixel = Luma([255])
+				}
+			}
+		}
+
+		Self { image }
+	}
+
+	/// Width of the canvas.
+	pub fn width(&self) -> u32 { self.image.width() }
+
+	/// Height of the canvas.
+	pub fn height(&self) -> u32 { self.image.height() }
+
+	/// Copies the image data in this canvas into a memory blob encoded as a
+	/// bitmap.
+	///
+	/// The format the bitmap will be in is full color 24-bpp RGB, in which
+	/// pixels marked as active will be painted black and pixels that are not
+	/// will be painted white.
+	pub fn to_bitmap(&self) -> Box<[u8]> {
+		let image = image::ImageBuffer::from_fn(
+			self.image.width(),
+			self.image.height(),
+			|x, y| {
+				let pixel = self.image.get_pixel(x, y).0[0];
+				image::Rgb([pixel, pixel, pixel])
+			});
+
+		let mut buffer = Vec::new();
+		let mut encoder = image::codecs::bmp::BmpEncoder::new(&mut buffer);
+
+		encoder.encode(
+			image.as_raw(),
+			image.width(),
+			image.height(),
+			image::ColorType::Rgb8)
+			.unwrap();
+
+		buffer.into_boxed_slice()
+	}
+}
+impl IntoTrace for BitmapPath {
+	type Trace<'a> = BitmapTrace;
+	fn trace<'a>(&'a self) -> Self::Trace<'a> {
+		let mut points = Vec::new();
+		for x in 0..self.image.width() {
+			for y in 0..self.image.height() {
+				if self.image.get_pixel(x, y).0[0] == 0 {
+					points.push((
+						f64::from(x) / f64::from(self.image.width()),
+						f64::from(y) / f64::from(self.image.height()),
+					))
+				}
+			}
+		}
+
+		BitmapTrace {
+			points: points.into_boxed_slice(),
+		}
+	}
+}
+
+/// A parametric curve derived from a bitmap path.
+pub struct BitmapTrace {
+	points: Box<[(f64, f64)]>,
+}
+impl Trace for BitmapTrace {
+	fn get<E>(&self, t: f64, buffer: &mut E) -> usize
+		where E: Extend<Point> {
+
+		let index = t * self.points.len() as f64;
+		let index = index.floor() as usize;
+		let (x, y) = if index < self.points.len() {
+			self.points[index]
+		} else {
+			return 0
+		};
+
+		buffer.extend([
+			Point {
+				x,
+				y,
+				touch: true
+			},
+			Point {
+				x,
+				y,
+				touch: false
+			},
+		]);
+		2
+	}
 }

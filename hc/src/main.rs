@@ -1,11 +1,9 @@
-#![feature(float_interpolation)]
-
 /* Display a console when in debug mode, have just the window be open when in
  * release mode. We don't want users thinking this is some kind of bad program,
  * do we? */
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![cfg_attr(debug_assertions, windows_subsystem = "console")]
-
+use crate::window::bitmap::BitmapError;
 use crate::window::NoTabletConnector;
 
 /// Utility structures for interpolating curved paths from ordered collections
@@ -23,6 +21,29 @@ mod strings;
 
 fn main() {
 	window::init();
+
+	match window::bitmap::run(None) {
+		Ok(_) => {},
+		Err(BitmapError::Cancelled) => {
+			println!("cancelled")
+		},
+		Err(what) => {
+			nwg::error_message(
+				&crate::strings::errors::title(),
+				&*match what {
+					BitmapError::Cancelled => unreachable!(),
+					BitmapError::InvalidFile(what) => format!(
+						"{}: {}",
+						crate::strings::errors::invalid_file(),
+						what),
+					BitmapError::FileNotFound =>
+						crate::strings::errors::file_not_found().to_string(),
+					BitmapError::WindowCreationError(_) => panic!("")
+				});
+		}
+	}
+	return;
+
 	let information = match window::pick_tablet() {
 		Ok(information) => information,
 		Err(what) => {

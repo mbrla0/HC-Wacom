@@ -22,12 +22,16 @@ features = [
 ]
 
 [dependencies.image]
-version = "0.23"
+version = "0"
 default-features = false
 features = [
-    "bmp"
+    "bmp",
+    "jpeg",
+    "jpeg_rayon",
+    "png"
 ]
 
 [features]
 lang-en_US = []
 lang-pt_BR = []
+default = ["lang-pt_BR"]

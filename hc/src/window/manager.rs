@@ -132,6 +132,13 @@ pub struct ManagementWindow {
 	)]
 	display_paint_done: nwg::Notice,
 
+	/// The notification channel through which we know the bitmap window is done.
+	#[nwg_control()]
+	#[nwg_events(
+		OnNotice: [Self::on_bitmap_window_done]
+	)]
+	bitmap_window_done: nwg::Notice,
+
 	/// The channel through which we communicate failures.
 	fails: std::sync::mpsc::Sender<ManagementError>,
 }
@@ -157,6 +164,7 @@ impl ManagementWindow {
 			path: Default::default(),
 			canvas: RefCell::new(EventCanvas::new(caps.width(), caps.height())),
 			display_paint_done: Default::default(),
+			bitmap_window_done: Default::default(),
 			fails
 		}
 	}
@@ -220,6 +228,21 @@ impl ManagementWindow {
 			&self.window,
 			crate::strings::manager::help_btn(),
 			crate::strings::manager::help());
+	}
+
+	/// Called when an intent for loading a bitmap signature has been fired.
+	fn on_bitmap_load_pressed(&self) {
+		self.lock();
+		let channel = self.bitmap_window_done.sender();
+
+		std::thread::spawn(move || {
+			super::bitmap::run(Some(channel));
+		});
+	}
+
+	/// Called when the bitmap window is done.
+	fn on_bitmap_window_done(&self) {
+		self.unlock();
 	}
 
 	/// Called when an intent for painting the device data has been fired.

@@ -1,4 +1,5 @@
-use crate::path::{EventPath, Point};
+use std::collections::VecDeque;
+use crate::path::{IntoTrace, Point, Trace};
 use std::time::{Duration, Instant};
 use std::num::NonZeroU32;
 use std::sync::atomic::AtomicBool;
@@ -9,9 +10,9 @@ static MOUSE_LOCK: AtomicBool = AtomicBool::new(false);
 /// A structure controlling the playback of an event path over a region of the
 /// screen.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Playback {
+pub struct Playback<T> {
 	/// The path this structure is going to be playing back.
-	pub path: EventPath,
+	pub path: T,
 	/// The rectangular region that maps the output to the physical screen.
 	pub target: ScreenArea,
 	/// The amount of time that the path should take to get written down.
@@ -19,7 +20,9 @@ pub struct Playback {
 	/// The number of steps that will be used to play the path back.
 	pub steps: NonZeroU32,
 }
-impl Playback {
+impl<T> Playback<T>
+	where T: IntoTrace {
+
 	/// Maps a point in normalized space into a point in screen space.
 	fn map(&self, point: Point) -> (i32, i32) {
 		let Point { x, y, .. } = point;
@@ -47,7 +50,9 @@ impl Playback {
 	}
 
 	/// Perform the mouse movements specified by this structure on to the screen.
-	pub fn play_and_notify(self, sender: nwg::NoticeSender) {
+	pub fn play_and_notify(self, sender: nwg::NoticeSender)
+		where T: Send + 'static {
+
 		if MOUSE_LOCK.fetch_or(true, std::sync::atomic::Ordering::SeqCst) {
 			/* Calling this function twice is a bug in this program. */
 			panic!("Called Playback::play_and_notify() more than once");
@@ -61,53 +66,56 @@ impl Playback {
 			let dt = self.delta.div_f64(f64::from(self.steps.get()));
 			let dx = 1.0 / f64::from(self.steps.get());
 
+			let mut buffer = VecDeque::new();
+
 			for _ in 0..self.steps.get() {
-				let timer = Instant::now();
-
 				/* Evaluate the curve at the current position. */
-				let point = match trace.get(x) {
-					Some(point) => point,
-					None => break
-				};
-				let (px, py) = self.map(point);
+				let points = trace.get(x, &mut buffer);
+				if points == 0 { break }
 
-				/* Build the input structure and send it. */
-				unsafe {
-					let mut input: winapi::um::winuser::INPUT =
-						std::mem::zeroed();
+				for point in buffer.drain(..) {
+					let timer1 = Instant::now();
 
-					input.type_ = winapi::um::winuser::INPUT_MOUSE;
+					let (px, py) = self.map(point);
 
-					input.u.mi_mut().dx = px;
-					input.u.mi_mut().dy = py;
-					input.u.mi_mut().mouseData = 0;
+					/* Build the input structure and send it. */
+					unsafe {
+						let mut input: winapi::um::winuser::INPUT =
+							std::mem::zeroed();
 
-					input.u.mi_mut().time = 0;
+						input.type_ = winapi::um::winuser::INPUT_MOUSE;
 
-					input.u.mi_mut().dwExtraInfo = 0;
-					input.u.mi_mut().dwFlags =
-						  winapi::um::winuser::MOUSEEVENTF_ABSOLUTE
-						| winapi::um::winuser::MOUSEEVENTF_MOVE
-						| if !pressed && point.touch {
-							  pressed = true;
-							  winapi::um::winuser::MOUSEEVENTF_LEFTDOWN
-						  } else if pressed && !point.touch {
-							  pressed = false;
-							  winapi::um::winuser::MOUSEEVENTF_LEFTUP
-						  } else { 0 };
+						input.u.mi_mut().dx = px;
+						input.u.mi_mut().dy = py;
+						input.u.mi_mut().mouseData = 0;
 
-					let _ = winapi::um::winuser::SendInput(
-						1,
-						&mut input,
-						std::mem::size_of::<winapi::um::winuser::INPUT>() as _,);
+						input.u.mi_mut().time = 0;
+
+						input.u.mi_mut().dwExtraInfo = 0;
+						input.u.mi_mut().dwFlags =
+							winapi::um::winuser::MOUSEEVENTF_ABSOLUTE
+								| winapi::um::winuser::MOUSEEVENTF_MOVE
+								| if !pressed && point.touch {
+								pressed = true;
+								winapi::um::winuser::MOUSEEVENTF_LEFTDOWN
+							} else if pressed && !point.touch {
+								pressed = false;
+								winapi::um::winuser::MOUSEEVENTF_LEFTUP
+							} else { 0 };
+
+						let _ = winapi::um::winuser::SendInput(
+							1,
+							&mut input,
+							std::mem::size_of::<winapi::um::winuser::INPUT>() as _, );
+					}
+
+					x += dx;
+
+					/* Spinning is way more accurate than using thread::sleep,
+					 * and for small amounts time like we're dealing with here
+					 * it would be too inaccurate. */
+					while timer1.elapsed() < dt {}
 				}
-
-				x += dx;
-
-				/* Spinning is way more accurate than using thread::sleep,
-				 * and for small amounts time like we're dealing with here
-				 * it is too inaccurate. */
-				while timer.elapsed() < dt { }
 			}
 
 			/* Tell the mouse to release the left down key. */

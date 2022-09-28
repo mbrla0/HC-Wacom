@@ -12,8 +12,8 @@ pub mod manager {
 			\n2) Solicite ao paciente que assine no dispositivo;\
 			\n3) Vá para a janela do TCLE e clique em Assinar;\
 			\n4) Selecione a área de assinatura;\
-			\n5) Aperte a Tecla 'e' para adicionar a assitura;\
-			\n6) Clique em \"Salvar Assintura\" no TCLE digital.\
+			\n5) Aperte a Tecla 'e' para adicionar a assinatura;\
+			\n6) Clique em \"Salvar Assinatura\" no TCLE digital.\
 		"
 	}
 	pub fn display_clear_btn() -> &'static str { "Limpar" }
@@ -35,6 +35,23 @@ pub mod area {
 		"Selecione uma regiao clicando e arrastando em qualquer parte da tela. \
 		Pressione 'e' para confirmar a regiao selecionada e 'q' para cancelar."
 	}
+}
+
+/// Strings used in bitmap printing menu.
+pub mod bitmap {
+	pub fn display_label() -> &'static str { "Oncologia Clínica - HC FMRP - USP" }
+	pub fn file_select_title() -> &'static str {
+		"Selecione a imagem contendo a assinatura"
+	}
+	pub fn file_select_filter_image() -> &'static str {
+		"Arquivos de imagem"
+	}
+	pub fn file_select_filter_all() -> &'static str {
+		"Todos os arquivos"
+	}
+	pub fn cancel_btn() -> &'static str { "Cancelar" }
+	pub fn display_paint_btn() -> &'static str { "Assinar" }
+	pub fn title() -> &'static str { "Assinatura contida no arquivo" }
 }
 
 /// Strings used in error messages.
@@ -78,7 +95,13 @@ pub mod errors {
 	pub fn management_failed(
 		what: crate::window::ManagementError) -> String {
 		format!(
-			"Occoreu um erro durante a supervisão do dispositivo: {}",
+			"Ocorreu um erro durante a supervisão do dispositivo: {}",
 			what)
+	}
+	pub fn invalid_file() -> &'static str {
+		"O arquivo selecionado é inválido"
+	}
+	pub fn file_not_found() -> &'static str {
+		"O arquivo não foi encontrado"
 	}
 }
